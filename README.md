@@ -1,6 +1,6 @@
 # fine-tuning-Qwen3-14B-QLoRA
 
-中文医疗对话数据集：https://github.com/Toyhom/Chinese-medical-dialogue-data。
+**中文医疗对话数据集**：https://github.com/Toyhom/Chinese-medical-dialogue-data。
 
    • <Andriatria_男科> 94596个问答对
 
@@ -19,15 +19,16 @@
 
    • <Surgical_外科> 115991个问答对
 
-数据均衡采样：每个科室3000个问答队，一共六个科室。总数据样本18000条
+**数据均衡采样**：每个科室3000个问答队，一共六个科室。总数据样本18000条
 
 
-验证集：按照15%获取。18000条 * 0.15=2700条
+**验证集**：按照15%获取。18000条 * 0.15=2700条
 
 
-GPU环境：RTX4090 24G
+**GPU环境**：RTX4090 24G
 
 ⏱️  训练耗时: 23785 秒
+
 📊 下面是每次epoch的验证损失: 
 
 epoch=1时，验证损失
