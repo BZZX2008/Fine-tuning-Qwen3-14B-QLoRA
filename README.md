@@ -50,9 +50,9 @@
 
 
 **测试集评估结果**
-sacreBLEU (corpus): 0.37%
-ROUGE-1 F1: 22.61%
-ROUGE-2 F1: 6.18%
-ROUGE-L F1: 16.27%
-BERTScore-F1 (中文): 70.06%                                                                                                                                                                        
+                  sacreBLEU (corpus): 0.37%
+                  ROUGE-1 F1: 22.61%
+                  ROUGE-2 F1: 6.18%
+                  ROUGE-L F1: 16.27%
+                  BERTScore-F1 (中文): 70.06%                                                                                                                                                                        
 <img width="3059" height="1024" alt="Image" src="https://github.com/user-attachments/assets/a2f392d8-f51b-4bc0-a54f-6aacf778b889" />
