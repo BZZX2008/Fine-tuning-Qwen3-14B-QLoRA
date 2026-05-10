@@ -35,7 +35,7 @@
 
 ⏱️  **训练耗时**: 22279 秒
 
-📊 **下面是每次epoch的验证损失**: 
+📊 **每次epoch的验证损失**: 其中epoch=2时，效果最好
 
                       epoch=1时，验证损失
                       {'eval_loss': '2.062', 'eval_runtime': '341.5', 'eval_samples_per_second': '5.271', 'eval_steps_per_second': '5.271', 'epoch': '1'} 33%| | 1800/5400 [2:03:11<3:54:37,  3.91s/it
@@ -46,7 +46,7 @@
                       epoch=3时，验证损失
                       {'eval_loss': '2.345', 'eval_runtime': '341.1', 'eval_samples_per_second': '5.277', 'eval_steps_per_second': '5.277', 'epoch': '3'} 100%|  | 5400/5400 [6:11:14<00:00,  4.13s/it
 
-其中epoch=2时，效果最好
+
 
 
 **测试集评估结果**
