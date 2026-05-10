@@ -7,8 +7,8 @@
 
 **微调方式**：QLoRA
 
-**微调对象**：注意力层参数：q_pro, k_pro，v_pro, o_pro
-             前馈神经网络层参数：gate_pro, up_pro, down_pro
+**微调对象**：注意力层参数：q_proj, k_proj，v_proj, o_proj
+             前馈神经网络层参数：gate_proj, up_proj, down_proj
 
 **数据集**：中文医疗对话数据集https://github.com/Toyhom/Chinese-medical-dialogue-data。
 
