@@ -63,3 +63,14 @@
                      sacreBLEU	            0.37%	        极低，符合医疗领域特点
                                                                                                                                                                                        
 <img width="3059" height="1024" alt="Image" src="https://github.com/user-attachments/assets/a2f392d8-f51b-4bc0-a54f-6aacf778b889" />
+
+
+**进一步优化方向**
+
+    升级基座模型为带Instruct指令微调模型
+    
+    引入 DPO 对齐提升安全性与格式
+
+    增加数据多样性（如问诊对话、检查报告解读）
+
+    加入用户反馈，人工评估
