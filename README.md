@@ -52,14 +52,16 @@
 **测试集评估结果**
 
            在下图中可以看到：
-                  
-                     sacreBLEU (corpus): 0.37%
-                  
-                     ROUGE-1 F1: 22.61%
-                  
-                     ROUGE-2 F1: 6.18%
-                  
-                     ROUGE-L F1: 16.27%
+                     指标	                   数值	        说明
                      
-                     BERTScore-F1 (中文): 70.06%                                                                                                                                                                        
+                     BERTScore-F1(中文)	    70.06%	      语义相似度优秀
+                     
+                     ROUGE-1 F1	            22.61%	      关键词覆盖良好
+                     
+                     ROUGE-2 F1	            6.18%	        短语匹配有限，但医疗同义替换常见
+                     
+                     ROUGE-L F1	            16.27%	      长句结构相似度较好
+                     
+                     sacreBLEU	            0.37%	        极低，符合医疗领域特点
+                                                                                                                                                                                       
 <img width="3059" height="1024" alt="Image" src="https://github.com/user-attachments/assets/a2f392d8-f51b-4bc0-a54f-6aacf778b889" />
