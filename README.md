@@ -1,4 +1,4 @@
-# fine-tuning-Qwen3-14B-QLoRA
+# Fine-tuning-Qwen3-14B-QLoRA
 **项目内容**:  医疗垂直领域，提升大模型在医疗咨询的专业回复能力。
 
 
