@@ -22,9 +22,11 @@
                         
              **本次微调数据集**：对整个中文医疗对话数据集采用均衡采样，每个科室采样3000个问答对。一共六个科室，微调数据集总样本数为18000条
              
-             **取验证集**： 按照15%获取。 18000条 * 0.15=2700条
+             **取验证集**： 按照10%获取。 18000条 * 0.10=1800条
              
-             **训练集**： 18000条-2700条=15300条
+             **取测试集**： 按照10%获取。 18000条 * 0.10=1800条
+
+             **取训练集**： 按照10%获取。 18000条 - 3600条 = 14400条
 
 
 **GPU环境**：RTX4090 24G
@@ -34,16 +36,13 @@
 📊 **下面是每次epoch的验证损失**: 
 
                       epoch=1时，验证损失
-                      {'eval_loss': '2.008', 'eval_runtime': '506.6', 'eval_samples_per_second': '5.329', 'eval_steps_per_second': '5.329', 'epoch': '1'}                                                                                                                                                                            
-                      33%|  | 1913/5739 [2:11:02<3:30:55,  3.31s/it
+                      {'eval_loss': '2.062', 'eval_runtime': '341.5', 'eval_samples_per_second': '5.271', 'eval_steps_per_second': '5.271', 'epoch': '1'} 33%| | 1800/5400 [2:03:11<3:54:37,  3.91s/it
 
                       epoch=2时，验证损失
-                      {'eval_loss': '1.966', 'eval_runtime': '506.3', 'eval_samples_per_second': '5.333', 'eval_steps_per_second': '5.333', 'epoch': '2'}                                                                                                                                                                            
-                      67%|  | 3826/5739 [4:22:59<1:46:32,  3.34s/it
+                      {'eval_loss': '2.012', 'eval_runtime': '340.3', 'eval_samples_per_second': '5.289', 'eval_steps_per_second': '5.289', 'epoch': '2'} 67%|  | 3600/5400 [4:06:56<2:02:52,  4.10s/it
 
                       epoch=3时，验证损失
-                      {'eval_loss': '2.195', 'eval_runtime': '510.8', 'eval_samples_per_second': '5.285', 'eval_steps_per_second': '5.285', 'epoch': '3'}                                                                                                                                                                            
-                      100%|  | 5739/5739 [6:36:22<00:00,  3.26s/it
+                      {'eval_loss': '2.345', 'eval_runtime': '341.1', 'eval_samples_per_second': '5.277', 'eval_steps_per_second': '5.277', 'epoch': '3'} 100%|  | 5400/5400 [6:11:14<00:00,  4.13s/it
 
 其中epoch=2时，效果最好
 
