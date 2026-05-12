@@ -10,6 +10,24 @@
 **微调对象**：注意力层参数：q_proj, k_proj，v_proj, o_proj
              前馈神经网络层参数：gate_proj, up_proj, down_proj
 
+**配置参数**：
+ 
+             MAX_SEQ_LENGTH        = 2048      #序列长度
+             LORA_RANK             = 128       #LoRA的秩
+             LORA_ALPHA            = 256       #缩放因子 （通常取LORA_RANK的2倍）       缩放比例=LORA_ALPHA/LORA_RANK，过小：微调效果不明显；过大：偏离原始模型，导致遗忘
+             LORA_DROPOUT          = 0.1       #丢包率，为了防止过拟合
+             BATCH_SIZE            = 1         #可以根据显存调整
+             GRADIENT_ACCUMULATION = 8         #梯度下降
+             LEARNING_RATE         = 2e-4      #学习率
+             NUM_EPOCHS            = 3         #可根据需要调整，防止过拟合
+
+             SAMPLES_PER_DEPT = 3000                      # 每个科室采样 3000 条
+             MAX_Q_LEN        = 600
+             MAX_A_LEN        = 600
+             TEST_RATIO       = 0.10                      # 测试集占比
+             VALID_RATIO      = 0.1111                    # 验证集占剩余数据的比例（使得总验证集≈10%）
+             RANDOM_SEED      = 42
+
 **数据集**：中文医疗对话数据集https://github.com/Toyhom/Chinese-medical-dialogue-data。
 
             **包含六个科室的医疗对话**： 
