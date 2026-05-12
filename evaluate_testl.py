@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-医疗模型评估 —— 最终稳定版（BERTScore CPU 自适应截断）
-Qwen 推理：GPU
-BERTScore：CPU，batch_size=16，内部 tokenizer 自动截断 256 token
+医疗模型评估 —— 使用独立测试集（测试集未被训练触及）
 依赖：pip install jieba rouge sacrebleu bert-score tqdm modelscope
 """
 
-import os, sys, types, importlib.machinery, json, warnings
+import os, sys, types, importlib.machinery, json, warnings, inspect
 from enum import Enum
 warnings.filterwarnings("ignore")
 
-# ── 0. 环境修复（保持与训练脚本一致） ──
+# ===================== 0. 环境修复 =====================
 if 'OMP_NUM_THREADS' in os.environ:
     try: int(os.environ['OMP_NUM_THREADS'])
     except ValueError: del os.environ['OMP_NUM_THREADS']
@@ -38,7 +36,7 @@ class FakeTorchvisionLoader:
 
 sys.meta_path.insert(0, FakeTorchvisionLoader())
 
-# ── 1. 导入 ──
+# ===================== 1. 导入 =====================
 import torch
 from unsloth import FastLanguageModel
 import jieba
@@ -48,21 +46,25 @@ from bert_score import BERTScorer
 from modelscope import snapshot_download
 from transformers import AutoTokenizer
 
-# ── 2. 配置 ──
-LORA_PATH = "/root/autodl-tmp/qwen3-14b-medical-final/"
-EVAL_JSONL = "eval_dataset_final.jsonl"
+# ===================== 2. 配置 =====================
+# 使用训练结束后保存的最终模型（load_best_model_at_end=True 自动加载了最优检查点）
+LORA_PATH = "/root/autodl-tmp/qwen3-14b-medical-final/checkpoint-3600"
+# 若想手动指定某个检查点，可改为：
+# LORA_PATH = "/root/autodl-tmp/qwen3-14b-medical-final/checkpoint-XXXX"
+
+TEST_JSONL = "test_dataset.jsonl"       # 独立的测试集文件
 MAX_SEQ_LENGTH = 2048
-BATCH_SIZE = 8                     # Qwen推理批量
+BATCH_SIZE = 4
 
 BERT_MODEL_NAME = "tiansz/bert-base-chinese"
 BERT_CACHE_DIR = "/root/autodl-tmp/models/bert-score"
-BERT_MAX_TOKENS = 256              # BERT 截断长度
+BERT_MAX_TOKENS = 256
 
-# ── 3. 下载 BERT 模型（仅首次） ──
+# ===================== 3. 下载 BERT 模型 =====================
 print("正在从 ModelScope 下载 bert-base-chinese（仅首次下载）...")
 bert_model_path = snapshot_download(BERT_MODEL_NAME, cache_dir=BERT_CACHE_DIR)
-print('bert-base-chinese的位置：'+ str(bert_model_path))
-# ── 4. 加载微调 Qwen 模型 ──
+
+# ===================== 4. 加载微调模型 =====================
 print("加载微调后的 Qwen 模型...")
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name=LORA_PATH, max_seq_length=MAX_SEQ_LENGTH,
@@ -72,14 +74,14 @@ FastLanguageModel.for_inference(model)
 if tokenizer.pad_token_id is None or tokenizer.pad_token_id == tokenizer.eos_token_id:
     tokenizer.pad_token_id = 0
 
-# ── 5. 加载验证集 ──
-with open(EVAL_JSONL, "r", encoding="utf-8") as f:
+# ===================== 5. 加载测试集 =====================
+with open(TEST_JSONL, "r", encoding="utf-8") as f:
     records = [json.loads(line) for line in f]
 questions = [r["question"] for r in records]
 references = [r["answer"] for r in records]
-print(f"验证样本数: {len(questions)}")
+print(f"测试集样本数: {len(questions)}")
 
-# ── 6. 批量生成预测（GPU） ──
+# ===================== 6. 批量生成预测 =====================
 def generate_batch(qs):
     msgs = []
     for q in qs:
@@ -103,7 +105,7 @@ predictions = []
 for i in tqdm(range(0, len(questions), BATCH_SIZE), desc="批量推理中"):
     predictions.extend(generate_batch(questions[i:i+BATCH_SIZE]))
 
-# ── 7. 数据清洗 ──
+# ===================== 7. 清洗无效样本 =====================
 def clean(text):
     t = text.strip()
     if not t or all(ch in '！？。；“”’‘…—～　 \t\n\r' for ch in t): return ""
@@ -116,14 +118,14 @@ for ref, pred in zip(references, predictions):
         clean_refs.append(r); clean_preds.append(p)
 print(f"有效样本: {len(clean_refs)}")
 
-# ── 8. sacreBLEU ──
+# ===================== 8. sacreBLEU =====================
 try:
     from sacrebleu import corpus_bleu
     bleu = corpus_bleu(clean_preds, [clean_refs]).score
 except:
     bleu = None
 
-# ── 9. ROUGE ──
+# ===================== 9. ROUGE =====================
 def tokenize(text):
     return " ".join([w.strip() for w in jieba.cut(text) if w.strip()])
 
@@ -136,41 +138,28 @@ try:
 except:
     r1=r2=rl=0
 
-# ── 10. BERTScore（CPU，自适应截断） ──
+# ===================== 10. BERTScore（CPU，自适应截断） =====================
 avg_bertscore = None
 try:
-    # 预先准备自定义 tokenizer（已截断）
     bert_tokenizer = AutoTokenizer.from_pretrained(bert_model_path)
     bert_tokenizer.model_max_length = BERT_MAX_TOKENS
 
-    # 检测 BERTScorer 是否支持 tokenizer 参数
-    import inspect
     sig = inspect.signature(BERTScorer.__init__)
     if 'tokenizer' in sig.parameters:
-        print("BERTScorer 支持 tokenizer 参数，直接传入...")
         scorer = BERTScorer(
-            model_type=bert_model_path,
-            lang="zh",
-            num_layers=12,
-            tokenizer=bert_tokenizer,   # 传入自定义 tokenizer
-            device="cpu",
-            batch_size=16,
+            model_type=bert_model_path, lang="zh", num_layers=12,
+            tokenizer=bert_tokenizer, device="cpu", batch_size=16,
         )
     else:
-        print("BERTScorer 不支持 tokenizer 参数，修改内部 _tokenizer...")
         scorer = BERTScorer(
-            model_type=bert_model_path,
-            lang="zh",
-            num_layers=12,
-            device="cpu",
-            batch_size=16,
+            model_type=bert_model_path, lang="zh", num_layers=12,
+            device="cpu", batch_size=16,
         )
-        scorer._tokenizer = bert_tokenizer   # 直接替换内部 tokenizer
+        scorer._tokenizer = bert_tokenizer
 
-    # 验证截断是否生效
     test_ids = scorer._tokenizer.encode("测试 " * 500, truncation=True)
     assert len(test_ids) <= BERT_MAX_TOKENS, f"截断失败，长度 {len(test_ids)}"
-    print(f"✅ BERT tokenizer 截断验证通过（测试长度 {len(test_ids)}）")
+    print("✅ BERT tokenizer 截断验证通过")
 
     print("计算 BERTScore（CPU 模式，可能需要几分钟）...")
     P, R, F1 = scorer.score(clean_preds, clean_refs)
@@ -178,8 +167,8 @@ try:
 except Exception as e:
     print(f"⚠️ BERTScore 计算失败: {e}")
 
-# ── 11. 输出结果 ──
-print(f"\n📊 评估结果（有效样本 {len(clean_refs)} 条）")
+# ===================== 11. 输出结果 =====================
+print(f"\n📊 测试集评估结果（独立测试集，{len(clean_refs)} 条）")
 if bleu: print(f"sacreBLEU (corpus): {bleu:.2f}%")
 print(f"ROUGE-1 F1: {r1:.2f}%")
 print(f"ROUGE-2 F1: {r2:.2f}%")
