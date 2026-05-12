@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Qwen3-14B 医疗对话 LoRA 微调（最终优化版）
-优化：每科室1500条 | max_seq=2048 | dropout=0.1 | 15%验证集 | Cosine调度
+Qwen3-14B 医疗对话 LoRA 微调（训练/验证/测试集划分）
+- 每科室采样3000条，共18000条
+- 80%训练 / 10%验证 / 10%测试（测试集不参与训练）
 环境：torch 2.10.0+cu130, transformers 5.4.0, bitsandbytes 0.49.2
-单卡 RTX 4090 24GB，无需 DeepSpeed
+单卡 RTX 4090 24GB
 """
 
 import os, sys, types, importlib.machinery, random, json, warnings
@@ -54,21 +55,23 @@ print(f"PyTorch 版本: {torch.__version__}")
 MODEL_PATH = "/root/autodl-tmp/Qwen3-14B"
 DATA_DIR   = "data"
 OUTPUT_DIR = "/root/autodl-tmp/qwen3-14b-medical-final"
-EVAL_JSONL = "eval_dataset_final.jsonl"
+EVAL_JSONL = "eval_dataset.jsonl"       # 验证集
+TEST_JSONL = "test_dataset.jsonl"       # 测试集（最终评估用）
 
-MAX_SEQ_LENGTH        = 2048          # 长文本支持
-LORA_RANK             = 64
-LORA_ALPHA            = 128
-LORA_DROPOUT          = 0.1          # 提高至 0.1
+MAX_SEQ_LENGTH        = 2048
+LORA_RANK             = 128
+LORA_ALPHA            = 256
+LORA_DROPOUT          = 0.1
 BATCH_SIZE            = 1
-GRADIENT_ACCUMULATION = 8             # 有效 batch = 8，适配长序列
+GRADIENT_ACCUMULATION = 8
 LEARNING_RATE         = 2e-4
-NUM_EPOCHS            = 3
+NUM_EPOCHS            = 3                     # 可根据需要调整
 
-SAMPLES_PER_DEPT = 3000              # 每科室 3000 条
+SAMPLES_PER_DEPT = 3000                      # 每个科室采样 3000 条
 MAX_Q_LEN        = 600
 MAX_A_LEN        = 600
-VALIDATION_RATIO = 0.15              # 15% 验证集
+TEST_RATIO       = 0.10                      # 测试集占比
+VALID_RATIO      = 0.1111                    # 验证集占剩余数据的比例（使得总验证集≈10%）
 RANDOM_SEED      = 42
 
 # ===================== 3. 加载基础模型 + LoRA =====================
@@ -137,24 +140,44 @@ def formatting_prompts_func(examples):
         texts.append(text)
     return {"text": texts}
 
+# 加载并采样原始数据（每个科室3000条）
 dataset = load_medical_data(DATA_DIR, samples_per_dept=SAMPLES_PER_DEPT,
                             max_q=MAX_Q_LEN, max_a=MAX_A_LEN, seed=RANDOM_SEED)
-dataset = dataset.map(formatting_prompts_func, batched=True)
-dataset = dataset.train_test_split(test_size=VALIDATION_RATIO, seed=RANDOM_SEED)
-train_dataset, eval_dataset = dataset['train'], dataset['test']
-print(f"训练集: {len(train_dataset)} 条, 验证集: {len(eval_dataset)} 条 (15%)")
 
-# 保存验证集供评估使用
-with open(EVAL_JSONL, "w", encoding="utf-8") as f:
-    for ex in eval_dataset:
-        f.write(json.dumps({"question":ex["question"],"answer":ex["answer"]}, ensure_ascii=False)+"\n")
-print("✅ 验证集已保存")
+# 首先分出测试集（10%）
+dataset_split = dataset.train_test_split(test_size=TEST_RATIO, seed=RANDOM_SEED)
+test_dataset = dataset_split['test']
+remaining = dataset_split['train']
+
+# 再从剩余数据中分出验证集（占比 ~10%）
+remaining_split = remaining.train_test_split(test_size=VALID_RATIO, seed=RANDOM_SEED)
+train_dataset = remaining_split['train']
+eval_dataset  = remaining_split['test']
+
+print(f"训练集: {len(train_dataset)} 条")
+print(f"验证集: {len(eval_dataset)} 条")
+print(f"测试集: {len(test_dataset)} 条")
+
+# 格式化数据
+train_dataset = train_dataset.map(formatting_prompts_func, batched=True)
+eval_dataset  = eval_dataset.map(formatting_prompts_func, batched=True)
+test_dataset  = test_dataset.map(formatting_prompts_func, batched=True)
+
+# 保存验证集和测试集为 JSONL（注意测试集也保存原始文本）
+def save_jsonl(dataset, filename):
+    with open(filename, "w", encoding="utf-8") as f:
+        for ex in dataset:
+            f.write(json.dumps({"question":ex["question"],"answer":ex["answer"]}, ensure_ascii=False)+"\n")
+
+save_jsonl(eval_dataset, EVAL_JSONL)
+save_jsonl(test_dataset, TEST_JSONL)
+print("✅ 验证集和测试集已保存")
 
 # ===================== 5. 训练参数 =====================
 training_args = TrainingArguments(
     per_device_train_batch_size=BATCH_SIZE,
     gradient_accumulation_steps=GRADIENT_ACCUMULATION,
-    warmup_steps=50,
+    warmup_steps=100,                           # 稍微加大预热量
     num_train_epochs=NUM_EPOCHS,
     learning_rate=LEARNING_RATE,
     fp16=False, bf16=True,
@@ -168,10 +191,9 @@ training_args = TrainingArguments(
     logging_dir=os.path.join(OUTPUT_DIR, "logs"),
     save_strategy="epoch",
     eval_strategy="epoch",
-    load_best_model_at_end=False,
+    load_best_model_at_end=True,                # 训练结束后自动加载最优模型
     metric_for_best_model="eval_loss",
     greater_is_better=False,
-    load_best_model_at_end=True,      #训练结束后，训练器会自动把验证损失最低的 checkpoint 加载到模型中，最终保存的 OUTPUT_DIR 就是最佳模型，无需手动指定 checkpoint。
 )
 
 trainer = SFTTrainer(
@@ -187,21 +209,17 @@ print(f"🎮 GPU: {gpu_stats.name}, 总显存: {gpu_stats.total_memory / 1024**3
 print("🚀 开始训练...")
 trainer_stats = trainer.train()
 
-# 提取最终验证损失
-final_eval_loss = None
-for log in reversed(trainer.state.log_history):
-    if 'eval_loss' in log:
-        final_eval_loss = log['eval_loss']; break
-
+used_memory = round(torch.cuda.max_memory_reserved()/1024**3, 3)
 print(f"⏱️  训练耗时: {trainer_stats.metrics['train_runtime']:.0f} 秒")
-print(f"📊 最终验证损失: {final_eval_loss}")
+print(f"📊 峰值显存占用: {used_memory} GB")
+print(f"🔍 最佳验证损失: {trainer_stats.metrics.get('eval_loss', 'N/A')}")
 
-# ===================== 7. 保存 LoRA 权重 =====================
+# ===================== 7. 保存最终模型 =====================
 model.save_pretrained(OUTPUT_DIR)
 tokenizer.save_pretrained(OUTPUT_DIR)
 print(f"💾 模型已保存至 {OUTPUT_DIR}")
 
-# ===================== 8. 推理测试 =====================
+# ===================== 8. 推理测试（简单演示） =====================
 FastLanguageModel.for_inference(model)
 def generate_response(question):
     messages = [{"role":"user","content":question}]
